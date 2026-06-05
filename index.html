@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dates</title>
+  <style>
+    body {
+      margin: 16px;
+      color: #111;
+      background: #fff;
+    }
+
+    main {
+      max-width: 980px;
+    }
+
+    fieldset {
+      margin: 0 0 16px;
+      padding: 12px 16px 16px;
+      border: 2px groove #bbb;
+    }
+
+    legend {
+      font-weight: 700;
+      padding: 0 6px;
+    }
+
+    label {
+      display: inline-block;
+      margin: 0 12px 10px 0;
+      font-weight: 700;
+    }
+
+    input {
+      width: 5.5em;
+      margin-left: 4px;
+      padding: 4px 6px;
+    }
+
+    input[name$="month"],
+    input[name$="day"] {
+      width: 3.5em;
+    }
+
+    .outputs {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    #epoch-outputs {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .output {
+      min-width: 0;
+    }
+
+    .output label {
+      display: block;
+      margin: 0 0 4px;
+    }
+
+    output {
+      display: block;
+      min-height: 1.4em;
+      padding: 6px 8px;
+      border: 1px solid #888;
+      overflow-wrap: anywhere;
+    }
+
+    button {
+      margin-top: 6px;
+      padding: 3px 10px;
+      cursor: pointer;
+    }
+
+    #message {
+      min-height: 1.4em;
+      margin: 0 0 12px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <fieldset>
+      <legend>Dates</legend>
+      <div>
+        <strong>First</strong>
+        <label>Year <input name="first-year" inputmode="numeric" autocomplete="off" maxlength="4"></label>
+        <label>Month <input name="first-month" inputmode="numeric" autocomplete="off" maxlength="2"></label>
+        <label>Day <input name="first-day" inputmode="numeric" autocomplete="off" maxlength="2"></label>
+      </div>
+      <div>
+        <strong>Second</strong>
+        <label>Year <input name="second-year" inputmode="numeric" autocomplete="off" maxlength="4"></label>
+        <label>Month <input name="second-month" inputmode="numeric" autocomplete="off" maxlength="2"></label>
+        <label>Day <input name="second-day" inputmode="numeric" autocomplete="off" maxlength="2"></label>
+      </div>
+    </fieldset>
+
+    <p id="message" aria-live="polite"></p>
+
+    <fieldset>
+      <legend>Difference</legend>
+      <div class="outputs">
+        <div class="output">
+          <label for="days">Days</label>
+          <output id="days"></output>
+          <button type="button" data-copy="days">Copy</button>
+        </div>
+        <div class="output">
+          <label for="months-days">Months and Days</label>
+          <output id="months-days"></output>
+          <button type="button" data-copy="months-days">Copy</button>
+        </div>
+        <div class="output">
+          <label for="hours">Hours</label>
+          <output id="hours"></output>
+          <button type="button" data-copy="hours">Copy</button>
+        </div>
+        <div class="output">
+          <label for="minutes">Minutes</label>
+          <output id="minutes"></output>
+          <button type="button" data-copy="minutes">Copy</button>
+        </div>
+        <div class="output">
+          <label for="seconds">Seconds</label>
+          <output id="seconds"></output>
+          <button type="button" data-copy="seconds">Copy</button>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>UNIX Epoch</legend>
+      <div class="outputs" id="epoch-outputs">
+        <div class="output">
+          <label for="first-epoch">First Date</label>
+          <output id="first-epoch"></output>
+          <button type="button" data-copy="first-epoch">Copy</button>
+        </div>
+        <div class="output">
+          <label for="second-epoch">Second Date</label>
+          <output id="second-epoch"></output>
+          <button type="button" data-copy="second-epoch">Copy</button>
+        </div>
+      </div>
+    </fieldset>
+  </main>
+
+  <script>
+    const dayMs = 24 * 60 * 60 * 1000;
+    const fields = Array.from(document.querySelectorAll("input"));
+    const copyButtons = Array.from(document.querySelectorAll("[data-copy]"));
+    const message = document.getElementById("message");
+    const outputs = {
+      days: document.getElementById("days"),
+      monthsDays: document.getElementById("months-days"),
+      hours: document.getElementById("hours"),
+      minutes: document.getElementById("minutes"),
+      seconds: document.getElementById("seconds"),
+      firstEpoch: document.getElementById("first-epoch"),
+      secondEpoch: document.getElementById("second-epoch")
+    };
+
+    function pad2(value) {
+      return String(value).padStart(2, "0");
+    }
+
+    function setToday() {
+      const today = new Date();
+      document.querySelector('[name="first-year"]').value = today.getFullYear();
+      document.querySelector('[name="first-month"]').value = pad2(today.getMonth() + 1);
+      document.querySelector('[name="first-day"]').value = pad2(today.getDate());
+    }
+
+    function readDate(prefix) {
+      const yearText = document.querySelector(`[name="${prefix}-year"]`).value.trim();
+      const monthText = document.querySelector(`[name="${prefix}-month"]`).value.trim();
+      const dayText = document.querySelector(`[name="${prefix}-day"]`).value.trim();
+
+      if (!yearText && !monthText && !dayText) return { missing: true };
+      if (!/^\d{1,4}$/.test(yearText) || !/^\d{1,2}$/.test(monthText) || !/^\d{1,2}$/.test(dayText)) {
+        return { invalid: true };
+      }
+
+      const year = Number(yearText);
+      const month = Number(monthText);
+      const day = Number(dayText);
+      const local = new Date(year, month - 1, day);
+
+      if (
+        local.getFullYear() !== year ||
+        local.getMonth() !== month - 1 ||
+        local.getDate() !== day
+      ) {
+        return { invalid: true };
+      }
+
+      return {
+        year,
+        month,
+        day,
+        utcMs: Date.UTC(year, month - 1, day)
+      };
+    }
+
+    function daysInMonth(year, month) {
+      return new Date(Date.UTC(year, month, 0)).getUTCDate();
+    }
+
+    function addMonths(date, months) {
+      const monthIndex = date.month - 1 + months;
+      const year = date.year + Math.floor(monthIndex / 12);
+      const month = ((monthIndex % 12) + 12) % 12 + 1;
+      const day = Math.min(date.day, daysInMonth(year, month));
+
+      return {
+        year,
+        month,
+        day,
+        utcMs: Date.UTC(year, month - 1, day)
+      };
+    }
+
+    function monthDayDiff(first, second) {
+      const start = first.utcMs <= second.utcMs ? first : second;
+      const end = first.utcMs <= second.utcMs ? second : first;
+      let months = (end.year - start.year) * 12 + end.month - start.month;
+      let anchor = addMonths(start, months);
+
+      if (anchor.utcMs > end.utcMs) {
+        months -= 1;
+        anchor = addMonths(start, months);
+      }
+
+      return {
+        months,
+        days: Math.round((end.utcMs - anchor.utcMs) / dayMs)
+      };
+    }
+
+    function plural(value, word) {
+      return `${value} ${word}${value === 1 ? "" : "s"}`;
+    }
+
+    function epochFor(date) {
+      const now = new Date();
+      const withCurrentTime = new Date(
+        date.year,
+        date.month - 1,
+        date.day,
+        now.getHours(),
+        now.getMinutes(),
+        now.getSeconds(),
+        now.getMilliseconds()
+      );
+
+      return Math.floor(withCurrentTime.getTime() / 1000);
+    }
+
+    function clearResults(text) {
+      Object.values(outputs).forEach((output) => {
+        output.textContent = "";
+      });
+      message.textContent = text;
+    }
+
+    function render() {
+      const first = readDate("first");
+      const second = readDate("second");
+
+      if (first.invalid || second.invalid) {
+        clearResults("Enter valid dates.");
+        return;
+      }
+
+      if (first.missing || second.missing) {
+        clearResults("Enter a second date.");
+        if (!first.missing) outputs.firstEpoch.textContent = epochFor(first);
+        return;
+      }
+
+      const days = Math.round(Math.abs(second.utcMs - first.utcMs) / dayMs);
+      const monthsDays = monthDayDiff(first, second);
+
+      outputs.days.textContent = plural(days, "day");
+      outputs.monthsDays.textContent = `${plural(monthsDays.months, "month")}, ${plural(monthsDays.days, "day")}`;
+      outputs.hours.textContent = plural(days * 24, "hour");
+      outputs.minutes.textContent = plural(days * 24 * 60, "minute");
+      outputs.seconds.textContent = plural(days * 24 * 60 * 60, "second");
+      outputs.firstEpoch.textContent = epochFor(first);
+      outputs.secondEpoch.textContent = epochFor(second);
+      message.textContent = "";
+    }
+
+    async function copyOutput(id, button) {
+      const output = document.getElementById(id);
+      const text = output.textContent.trim();
+
+      if (!text) return;
+
+      await navigator.clipboard.writeText(text);
+      const original = button.textContent;
+      button.textContent = "Copied";
+      window.setTimeout(() => {
+        button.textContent = original;
+      }, 900);
+    }
+
+    fields.forEach((field) => {
+      field.addEventListener("input", () => {
+        field.value = field.value.replace(/\D/g, "");
+        render();
+      });
+    });
+
+    copyButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        copyOutput(button.dataset.copy, button);
+      });
+    });
+
+    setToday();
+    render();
+  </script>
+</body>
+</html>
