@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:,">
   <title>Dates</title>
   <style>
     body {
@@ -41,12 +42,39 @@
 
     .outputs {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(6, minmax(0, 1fr));
       gap: 14px;
     }
 
     #epoch-outputs {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .output {
+      min-width: 0;
+    }
+
+    .output label {
+      display: block;
+      margin: 0 0 4px;
+    }
+
+    output,
+    .epoch-value {
+      box-sizing: border-box;
+      display: block;
+      width: 100%;
+      min-height: 1.4em;
+      margin: 0;
+      padding: 6px 8px;
+      border: 1px solid #888;
+      overflow-wrap: anywhere;
+    }
+
+    button {
+      margin-top: 6px;
+      padding: 3px 10px;
+      cursor: pointer;
     }
 
     .epoch-heading {
@@ -63,32 +91,43 @@
       overflow-wrap: anywhere;
     }
 
-    .output {
-      min-width: 0;
+    .add-date {
+      margin-bottom: 14px;
     }
 
-    .output label {
+    .add-result {
+      margin-bottom: 14px;
+      font-weight: 700;
+    }
+
+    .add-result button {
+      margin: 0 8px 0 0;
+    }
+
+    .amounts {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .amounts label {
       display: block;
-      margin: 0 0 4px;
     }
 
-    output {
+    .amounts input {
+      box-sizing: border-box;
       display: block;
-      min-height: 1.4em;
-      padding: 6px 8px;
-      border: 1px solid #888;
-      overflow-wrap: anywhere;
-    }
-
-    button {
-      margin-top: 6px;
-      padding: 3px 10px;
-      cursor: pointer;
+      width: 100%;
+      margin: 4px 0 0;
     }
 
     @media (max-width: 760px) {
       .outputs,
       #epoch-outputs {
+        grid-template-columns: 1fr;
+      }
+
+      .amounts {
         grid-template-columns: 1fr;
       }
     }
@@ -119,7 +158,12 @@
           <button type="button" data-copy="days">Copy</button>
         </div>
         <div class="output">
-          <label for="months-days">Months and Days</label>
+          <label for="weeks-days">Weeks+Days</label>
+          <output id="weeks-days"></output>
+          <button type="button" data-copy="weeks-days">Copy</button>
+        </div>
+        <div class="output">
+          <label for="months-days">Months+Days</label>
           <output id="months-days"></output>
           <button type="button" data-copy="months-days">Copy</button>
         </div>
@@ -148,7 +192,7 @@
           <div class="epoch-heading">
             <button type="button" data-copy="first-epoch-copy">Copy</button>First Date
           </div>
-          <output id="first-epoch"></output>
+          <input class="epoch-value" id="first-epoch" data-epoch="first" inputmode="numeric" autocomplete="off">
           <div class="epoch-time" id="first-epoch-local"></div>
           <div class="epoch-time" id="first-epoch-utc"></div>
           <span id="first-epoch-copy" hidden></span>
@@ -157,21 +201,47 @@
           <div class="epoch-heading">
             <button type="button" data-copy="second-epoch-copy">Copy</button>Second Date
           </div>
-          <output id="second-epoch"></output>
+          <input class="epoch-value" id="second-epoch" data-epoch="second" inputmode="numeric" autocomplete="off">
           <div class="epoch-time" id="second-epoch-local"></div>
           <div class="epoch-time" id="second-epoch-utc"></div>
           <span id="second-epoch-copy" hidden></span>
         </div>
       </div>
     </fieldset>
+
+    <fieldset>
+      <legend>Add / Subtract</legend>
+      <div class="add-date">
+        <label>Year <input name="calc-year" inputmode="numeric" autocomplete="off" maxlength="4"></label>
+        <label>Month <input name="calc-month" inputmode="numeric" autocomplete="off" maxlength="2"></label>
+        <label>Date <input name="calc-day" inputmode="numeric" autocomplete="off" maxlength="2"></label>
+      </div>
+      <div class="add-result">
+        <button type="button" data-copy="add-result">Copy</button>
+        <span id="add-result"></span>
+      </div>
+      <div class="amounts">
+        <label>Days <input class="amount" name="add-days" inputmode="numeric" pattern="-?[0-9]*" autocomplete="off"></label>
+        <label>Weeks <input class="amount" name="add-weeks" inputmode="numeric" pattern="-?[0-9]*" autocomplete="off"></label>
+        <label>Months <input class="amount" name="add-months" inputmode="numeric" pattern="-?[0-9]*" autocomplete="off"></label>
+        <label>Years <input class="amount" name="add-years" inputmode="numeric" pattern="-?[0-9]*" autocomplete="off"></label>
+      </div>
+    </fieldset>
   </main>
 
   <script>
     const dayMs = 24 * 60 * 60 * 1000;
-    const fields = Array.from(document.querySelectorAll("input"));
+    const dateInputs = Array.from(document.querySelectorAll('input[name$="-year"], input[name$="-month"], input[name$="-day"]'));
+    const epochInputs = Array.from(document.querySelectorAll("[data-epoch]"));
+    const amountInputs = Array.from(document.querySelectorAll(".amount"));
     const copyButtons = Array.from(document.querySelectorAll("[data-copy]"));
+    const timeState = {
+      first: null,
+      second: null
+    };
     const outputs = {
       days: document.getElementById("days"),
+      weeksDays: document.getElementById("weeks-days"),
       monthsDays: document.getElementById("months-days"),
       hours: document.getElementById("hours"),
       minutes: document.getElementById("minutes"),
@@ -183,7 +253,8 @@
       firstEpochUtc: document.getElementById("first-epoch-utc"),
       secondEpochUtc: document.getElementById("second-epoch-utc"),
       firstEpochCopy: document.getElementById("first-epoch-copy"),
-      secondEpochCopy: document.getElementById("second-epoch-copy")
+      secondEpochCopy: document.getElementById("second-epoch-copy"),
+      addResult: document.getElementById("add-result")
     };
     const blankEpoch = { epoch: "", local: "", utc: "" };
 
@@ -191,11 +262,37 @@
       return String(value).padStart(2, "0");
     }
 
-    function setToday() {
-      const today = new Date();
-      document.querySelector('[name="second-year"]').value = today.getFullYear();
-      document.querySelector('[name="second-month"]').value = pad2(today.getMonth() + 1);
-      document.querySelector('[name="second-day"]').value = pad2(today.getDate());
+    function digitsOnly(value) {
+      return value.replace(/\D/g, "");
+    }
+
+    function signedDigitsOnly(value) {
+      const trimmed = value.trim();
+      const sign = trimmed.startsWith("-") ? "-" : "";
+      return sign + trimmed.replace(/\D/g, "");
+    }
+
+    function datePrefix(name) {
+      return name.split("-")[0];
+    }
+
+    function timeParts(date) {
+      return {
+        hours: date.getHours(),
+        minutes: date.getMinutes(),
+        seconds: date.getSeconds(),
+        milliseconds: date.getMilliseconds()
+      };
+    }
+
+    function setDateFields(prefix, date) {
+      document.querySelector(`[name="${prefix}-year"]`).value = date.getFullYear();
+      document.querySelector(`[name="${prefix}-month"]`).value = pad2(date.getMonth() + 1);
+      document.querySelector(`[name="${prefix}-day"]`).value = pad2(date.getDate());
+    }
+
+    function setToday(prefix) {
+      setDateFields(prefix, new Date());
     }
 
     function readDate(prefix) {
@@ -233,6 +330,10 @@
       return new Date(Date.UTC(year, month, 0)).getUTCDate();
     }
 
+    function daysInLocalMonth(year, monthIndex) {
+      return new Date(year, monthIndex + 1, 0).getDate();
+    }
+
     function addMonths(date, months) {
       const monthIndex = date.month - 1 + months;
       const year = date.year + Math.floor(monthIndex / 12);
@@ -245,6 +346,16 @@
         day,
         utcMs: Date.UTC(year, month - 1, day)
       };
+    }
+
+    function addToLocalDate(date, years, months, weeks, days) {
+      const rawMonth = date.month - 1 + months;
+      const year = date.year + years + Math.floor(rawMonth / 12);
+      const monthIndex = ((rawMonth % 12) + 12) % 12;
+      const day = Math.min(date.day, daysInLocalMonth(year, monthIndex));
+      const result = new Date(year, monthIndex, day);
+      result.setDate(result.getDate() + weeks * 7 + days);
+      return result;
     }
 
     function monthDayDiff(first, second) {
@@ -282,27 +393,32 @@
       ].join(" ");
     }
 
-    function epochPartsFor(date) {
-      const now = new Date();
-      const withCurrentTime = new Date(
+    function epochDateFor(prefix, date) {
+      const time = timeState[prefix] || timeParts(new Date());
+      return new Date(
         date.year,
         date.month - 1,
         date.day,
-        now.getHours(),
-        now.getMinutes(),
-        now.getSeconds(),
-        now.getMilliseconds()
+        time.hours,
+        time.minutes,
+        time.seconds,
+        time.milliseconds
       );
+    }
+
+    function epochPartsFor(prefix, date) {
+      const epochDate = epochDateFor(prefix, date);
 
       return {
-        epoch: String(Math.floor(withCurrentTime.getTime() / 1000)),
-        local: withCurrentTime.toString(),
-        utc: utcStringFor(withCurrentTime)
+        epoch: String(Math.floor(epochDate.getTime() / 1000)),
+        local: epochDate.toString(),
+        utc: utcStringFor(epochDate)
       };
     }
 
     function clearDifference() {
       outputs.days.textContent = "";
+      outputs.weeksDays.textContent = "";
       outputs.monthsDays.textContent = "";
       outputs.hours.textContent = "";
       outputs.minutes.textContent = "";
@@ -316,42 +432,100 @@
 
     function renderEpoch(prefix, date) {
       const ready = !date.invalid && !date.missing;
-      const parts = ready ? epochPartsFor(date) : blankEpoch;
+      const parts = ready ? epochPartsFor(prefix, date) : blankEpoch;
+      const epochInput = outputs[`${prefix}Epoch`];
 
-      outputs[`${prefix}Epoch`].textContent = parts.epoch;
+      if (document.activeElement !== epochInput) {
+        epochInput.value = parts.epoch;
+      }
+
       outputs[`${prefix}EpochLocal`].textContent = parts.local;
       outputs[`${prefix}EpochUtc`].textContent = parts.utc;
       outputs[`${prefix}EpochCopy`].textContent = ready ? `${parts.epoch} - ${parts.local} (${parts.utc})` : "";
     }
 
-    function render() {
-      const first = readDate("first");
-      const second = readDate("second");
-      renderEpochs(first, second);
-
-      if (first.invalid || second.invalid) {
-        clearDifference();
-        return;
-      }
-
-      if (first.missing || second.missing) {
+    function renderDifference(first, second) {
+      if (first.invalid || second.invalid || first.missing || second.missing) {
         clearDifference();
         return;
       }
 
       const days = Math.round(Math.abs(second.utcMs - first.utcMs) / dayMs);
+      const weeks = Math.floor(days / 7);
+      const weekDays = days % 7;
       const monthsDays = monthDayDiff(first, second);
 
       outputs.days.textContent = plural(days, "day");
+      outputs.weeksDays.textContent = `${plural(weeks, "week")}, ${plural(weekDays, "day")}`;
       outputs.monthsDays.textContent = `${plural(monthsDays.months, "month")}, ${plural(monthsDays.days, "day")}`;
       outputs.hours.textContent = plural(days * 24, "hour");
       outputs.minutes.textContent = plural(days * 24 * 60, "minute");
       outputs.seconds.textContent = plural(days * 24 * 60 * 60, "second");
     }
 
+    function readAmount(name) {
+      const text = document.querySelector(`[name="${name}"]`).value.trim();
+      if (!text) return { value: 0, invalid: false };
+      if (!/^-?\d+$/.test(text)) return { invalid: true };
+      return { value: Number(text), invalid: false };
+    }
+
+    function renderAddSubtract() {
+      const base = readDate("calc");
+
+      if (base.invalid || base.missing) {
+        outputs.addResult.textContent = "";
+        return;
+      }
+
+      const days = readAmount("add-days");
+      const weeks = readAmount("add-weeks");
+      const months = readAmount("add-months");
+      const years = readAmount("add-years");
+      const amounts = [days, weeks, months, years];
+
+      outputs.addResult.textContent = amounts.some((amount) => amount.invalid)
+        ? ""
+        : addToLocalDate(base, years.value, months.value, weeks.value, days.value).toDateString();
+    }
+
+    function render() {
+      const first = readDate("first");
+      const second = readDate("second");
+
+      renderEpochs(first, second);
+      renderDifference(first, second);
+      renderAddSubtract();
+    }
+
+    function clearDate(prefix) {
+      document.querySelector(`[name="${prefix}-year"]`).value = "";
+      document.querySelector(`[name="${prefix}-month"]`).value = "";
+      document.querySelector(`[name="${prefix}-day"]`).value = "";
+      timeState[prefix] = null;
+    }
+
+    function syncDateFromEpoch(prefix) {
+      const text = outputs[`${prefix}Epoch`].value.trim();
+      const match = text.match(/^-?\d+/);
+
+      if (!match) {
+        clearDate(prefix);
+        render();
+        return;
+      }
+
+      const epochDate = new Date(Number(match[0]) * 1000);
+      if (Number.isNaN(epochDate.getTime())) return;
+
+      setDateFields(prefix, epochDate);
+      timeState[prefix] = timeParts(epochDate);
+      render();
+    }
+
     async function copyOutput(id, button) {
       const output = document.getElementById(id);
-      const text = output.textContent.trim();
+      const text = ("value" in output ? output.value : output.textContent).trim();
 
       if (!text) return;
 
@@ -363,10 +537,38 @@
       }, 900);
     }
 
-    fields.forEach((field) => {
+    dateInputs.forEach((field) => {
       field.addEventListener("input", () => {
-        field.value = field.value.replace(/\D/g, "");
+        field.value = digitsOnly(field.value);
+
+        if (field.name.startsWith("first-") || field.name.startsWith("second-")) {
+          timeState[datePrefix(field.name)] = timeParts(new Date());
+        }
+
         render();
+      });
+    });
+
+    epochInputs.forEach((field) => {
+      field.addEventListener("input", (event) => {
+        field.value = signedDigitsOnly(field.value);
+
+        if (!field.value || event.inputType === "insertFromPaste") {
+          syncDateFromEpoch(field.dataset.epoch);
+        }
+      });
+      field.addEventListener("paste", () => {
+        window.setTimeout(() => syncDateFromEpoch(field.dataset.epoch), 0);
+      });
+      field.addEventListener("change", () => {
+        syncDateFromEpoch(field.dataset.epoch);
+      });
+    });
+
+    amountInputs.forEach((field) => {
+      field.addEventListener("input", () => {
+        field.value = signedDigitsOnly(field.value);
+        renderAddSubtract();
       });
     });
 
@@ -376,7 +578,9 @@
       });
     });
 
-    setToday();
+    setToday("second");
+    setToday("calc");
+    timeState.second = timeParts(new Date());
     render();
   </script>
 </body>
